@@ -1,16 +1,16 @@
-use std::iter;
+mod camera;
+mod instance;
+mod model;
+mod texture; // NEW!
 
 use cgmath::prelude::*;
+use std::iter;
 use wgpu::util::DeviceExt;
 use winit::{
     event::*,
     event_loop::{ControlFlow, EventLoop},
     window::Window,
 };
-
-mod camera;
-mod model;
-mod texture; // NEW!
 
 use model::{DrawLight, DrawModel, Vertex};
 
@@ -38,67 +38,6 @@ impl Uniforms {
     }
 }
 
-struct Instance {
-    position: cgmath::Vector3<f32>,
-    rotation: cgmath::Quaternion<f32>,
-}
-
-impl Instance {
-    fn to_raw(&self) -> InstanceRaw {
-        InstanceRaw {
-            model: (cgmath::Matrix4::from_translation(self.position)
-                * cgmath::Matrix4::from(self.rotation))
-            .into(),
-        }
-    }
-}
-
-#[repr(C)]
-#[derive(Debug, Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
-struct InstanceRaw {
-    #[allow(dead_code)]
-    model: [[f32; 4]; 4],
-}
-
-impl model::Vertex for InstanceRaw {
-    fn desc<'a>() -> wgpu::VertexBufferLayout<'a> {
-        use std::mem;
-        wgpu::VertexBufferLayout {
-            array_stride: mem::size_of::<InstanceRaw>() as wgpu::BufferAddress,
-            // We need to switch from using a step mode of Vertex to Instance
-            // This means that our shaders will only change to use the next
-            // instance when the shader starts processing a new instance
-            step_mode: wgpu::InputStepMode::Instance,
-            attributes: &[
-                wgpu::VertexAttribute {
-                    offset: 0,
-                    // While our vertex shader only uses locations 0, and 1 now, in later tutorials we'll
-                    // be using 2, 3, and 4, for Vertex. We'll start at slot 5 not conflict with them later
-                    shader_location: 5,
-                    format: wgpu::VertexFormat::Float4,
-                },
-                // A mat4 takes up 4 vertex slots as it is technically 4 vec4s. We need to define a slot
-                // for each vec4. We don't have to do this in code though.
-                wgpu::VertexAttribute {
-                    offset: mem::size_of::<[f32; 4]>() as wgpu::BufferAddress,
-                    shader_location: 6,
-                    format: wgpu::VertexFormat::Float4,
-                },
-                wgpu::VertexAttribute {
-                    offset: mem::size_of::<[f32; 8]>() as wgpu::BufferAddress,
-                    shader_location: 7,
-                    format: wgpu::VertexFormat::Float4,
-                },
-                wgpu::VertexAttribute {
-                    offset: mem::size_of::<[f32; 12]>() as wgpu::BufferAddress,
-                    shader_location: 8,
-                    format: wgpu::VertexFormat::Float4,
-                },
-            ],
-        }
-    }
-}
-
 #[repr(C)]
 #[derive(Debug, Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
 struct Light {
@@ -122,7 +61,7 @@ struct State {
     uniforms: Uniforms,
     uniform_buffer: wgpu::Buffer,
     uniform_bind_group: wgpu::BindGroup,
-    instances: Vec<Instance>,
+    instances: Vec<instance::Instance>,
     #[allow(dead_code)]
     instance_buffer: wgpu::Buffer,
     depth_texture: texture::Texture,
@@ -311,14 +250,17 @@ impl State {
                         )
                     };
 
-                    Instance { position, rotation }
+                    instance::Instance { position, rotation }
                 })
             })
             .collect::<Vec<_>>();
 
-        let instance_data = instances.iter().map(Instance::to_raw).collect::<Vec<_>>();
+        let instance_data = instances
+            .iter()
+            .map(instance::Instance::to_raw)
+            .collect::<Vec<_>>();
         let instance_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("Instance Buffer"),
+            label: Some("instance::Instance Buffer"),
             contents: bytemuck::cast_slice(&instance_data),
             usage: wgpu::BufferUsage::VERTEX,
         });
@@ -413,7 +355,7 @@ impl State {
             &render_pipeline_layout,
             sc_desc.format,
             Some(texture::Texture::DEPTH_FORMAT),
-            &[model::ModelVertex::desc(), InstanceRaw::desc()],
+            &[model::ModelVertex::desc(), instance::InstanceRaw::desc()],
             wgpu::include_spirv!("shader.vert.spv"),
             wgpu::include_spirv!("shader.frag.spv"),
         );
