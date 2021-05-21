@@ -1,5 +1,3 @@
-use wgpu::Device;
-
 pub struct ScreenshotDescriptor {
     pub width: u32,
     pub height: u32,
@@ -53,6 +51,65 @@ fn create_output_buffer(device: &wgpu::Device, width: u32, height: u32) -> wgpu:
     device.create_buffer(&output_buffer_desc)
 }
 
+fn render(
+    device: &wgpu::Device,
+    queue: &wgpu::Queue,
+    screenshot_width: u32,
+    screenshot_height: u32,
+    output_texture_desc: &wgpu::TextureDescriptor,
+    output_texture: &wgpu::Texture,
+    output_texture_view: &wgpu::TextureView,
+    output_buffer: &wgpu::Buffer,
+    render_pipeline: &wgpu::RenderPipeline,
+) {
+    let mut encoder =
+        device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
+
+    {
+        let render_pass_desc = wgpu::RenderPassDescriptor {
+            label: Some("Render Pass"),
+            color_attachments: &[wgpu::RenderPassColorAttachmentDescriptor {
+                attachment: output_texture_view,
+                resolve_target: None,
+                ops: wgpu::Operations {
+                    load: wgpu::LoadOp::Clear(wgpu::Color {
+                        r: 0.1,
+                        g: 0.2,
+                        b: 0.3,
+                        a: 0.0,
+                    }),
+                    store: true,
+                },
+            }],
+            depth_stencil_attachment: None,
+        };
+        let mut render_pass = encoder.begin_render_pass(&render_pass_desc);
+
+        render_pass.set_pipeline(render_pipeline);
+        render_pass.draw(0..3, 0..1);
+    }
+
+    let u32_size = std::mem::size_of::<u32>() as u32;
+    encoder.copy_texture_to_buffer(
+        wgpu::TextureCopyView {
+            texture: &output_texture,
+            mip_level: 0,
+            origin: wgpu::Origin3d::ZERO,
+        },
+        wgpu::BufferCopyView {
+            buffer: &output_buffer,
+            layout: wgpu::TextureDataLayout {
+                offset: 0,
+                bytes_per_row: u32_size * screenshot_width,
+                rows_per_image: screenshot_height,
+            },
+        },
+        output_texture_desc.size,
+    );
+
+    queue.submit(Some(encoder.finish()));
+}
+
 pub async fn run(screenshot_desc: ScreenshotDescriptor) {
     let (device, queue) = request_device().await;
 
@@ -104,60 +161,25 @@ pub async fn run(screenshot_desc: ScreenshotDescriptor) {
         },
     });
 
-    let mut encoder =
-        device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
-
-    {
-        let render_pass_desc = wgpu::RenderPassDescriptor {
-            label: Some("Render Pass"),
-            color_attachments: &[wgpu::RenderPassColorAttachmentDescriptor {
-                attachment: &output_texture_view,
-                resolve_target: None,
-                ops: wgpu::Operations {
-                    load: wgpu::LoadOp::Clear(wgpu::Color {
-                        r: 0.1,
-                        g: 0.2,
-                        b: 0.3,
-                        a: 0.0,
-                    }),
-                    store: true,
-                },
-            }],
-            depth_stencil_attachment: None,
-        };
-        let mut render_pass = encoder.begin_render_pass(&render_pass_desc);
-
-        render_pass.set_pipeline(&render_pipeline);
-        render_pass.draw(0..3, 0..1);
-    }
-
-    let u32_size = std::mem::size_of::<u32>() as u32;
-    encoder.copy_texture_to_buffer(
-        wgpu::TextureCopyView {
-            texture: &output_texture,
-            mip_level: 0,
-            origin: wgpu::Origin3d::ZERO,
-        },
-        wgpu::BufferCopyView {
-            buffer: &output_buffer,
-            layout: wgpu::TextureDataLayout {
-                offset: 0,
-                bytes_per_row: u32_size * screenshot_desc.width,
-                rows_per_image: screenshot_desc.height,
-            },
-        },
-        output_texture_desc.size,
+    render(
+        &device,
+        &queue,
+        screenshot_desc.width,
+        screenshot_desc.height,
+        &output_texture_desc,
+        &output_texture,
+        &output_texture_view,
+        &output_buffer,
+        &render_pipeline,
     );
-
-    queue.submit(Some(encoder.finish()));
 
     // We need to scope the mapping variables so that we can
     // unmap the buffer
     {
         let buffer_slice = output_buffer.slice(..);
 
-        // NOTE: We have to create the mapping THEN device.poll() before await
-        // the future. Otherwise the application will freeze.
+        // We have to create the mapping THEN device.poll() before await the
+        // future. Otherwise the application will freeze.
         let mapping = buffer_slice.map_async(wgpu::MapMode::Read);
         device.poll(wgpu::Maintain::Wait);
         mapping.await.unwrap();
