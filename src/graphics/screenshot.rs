@@ -21,8 +21,7 @@ async fn request_device() -> (wgpu::Device, wgpu::Queue) {
         .unwrap()
 }
 
-/// Get a description of the texture to which the output image will be written
-/// to.
+/// Get a description of the texture onto which the image will be rendered.
 fn output_texture_desc<'a>(width: u32, height: u32) -> wgpu::TextureDescriptor<'a> {
     wgpu::TextureDescriptor {
         size: wgpu::Extent3d {
@@ -39,6 +38,7 @@ fn output_texture_desc<'a>(width: u32, height: u32) -> wgpu::TextureDescriptor<'
     }
 }
 
+/// Create the buffer onto which the output image will be written.
 fn create_output_buffer(device: &wgpu::Device, width: u32, height: u32) -> wgpu::Buffer {
     let u32_size = std::mem::size_of::<u32>() as u32;
     let output_buffer_size = (u32_size * width * height) as wgpu::BufferAddress;
@@ -62,46 +62,14 @@ pub async fn run(screenshot_desc: ScreenshotDescriptor) {
     let output_buffer =
         create_output_buffer(&device, screenshot_desc.width, screenshot_desc.height);
 
-    let vs_src = include_str!("shader.vert");
-    let fs_src = include_str!("shader.frag");
-    let mut compiler = shaderc::Compiler::new().unwrap();
-    let vs_spirv = compiler
-        .compile_into_spirv(
-            vs_src,
-            shaderc::ShaderKind::Vertex,
-            "shader.vert",
-            "main",
-            None,
-        )
-        .unwrap();
-    let fs_spirv = compiler
-        .compile_into_spirv(
-            fs_src,
-            shaderc::ShaderKind::Fragment,
-            "shader.frag",
-            "main",
-            None,
-        )
-        .unwrap();
-    let vs_data = wgpu::util::make_spirv(vs_spirv.as_binary_u8());
-    let fs_data = wgpu::util::make_spirv(fs_spirv.as_binary_u8());
-    let vs_module = device.create_shader_module(&wgpu::ShaderModuleDescriptor {
-        label: Some("Vertex Shader"),
-        source: vs_data,
-        flags: wgpu::ShaderFlags::default(),
-    });
-    let fs_module = device.create_shader_module(&wgpu::ShaderModuleDescriptor {
-        label: Some("Fragment Shader"),
-        source: fs_data,
-        flags: wgpu::ShaderFlags::default(),
-    });
+    let vs_module = device.create_shader_module(&wgpu::include_spirv!("shader.vert.spv"));
+    let fs_module = device.create_shader_module(&wgpu::include_spirv!("shader.frag.spv"));
 
     let render_pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
         label: Some("Render Pipeline Layout"),
         bind_group_layouts: &[],
         push_constant_ranges: &[],
     });
-
     let render_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
         label: Some("Render Pipeline"),
         layout: Some(&render_pipeline_layout),
