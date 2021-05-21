@@ -1,6 +1,7 @@
 use super::texture;
 
-pub struct ScreenshotDescriptor {
+pub struct ScreenshotDescriptor<'a> {
+    pub dst_path: &'a str,
     pub width: u32,
     pub height: u32,
 }
@@ -36,6 +37,55 @@ fn create_output_buffer(device: &wgpu::Device, width: u32, height: u32) -> wgpu:
     device.create_buffer(&output_buffer_desc)
 }
 
+/// Create a render pipeline over the specified shaders.
+fn create_render_pipeline(
+    device: &wgpu::Device,
+    layout: &wgpu::PipelineLayout,
+    color_format: wgpu::TextureFormat,
+    vertex_layouts: &[wgpu::VertexBufferLayout],
+    vs_src: wgpu::ShaderModuleDescriptor,
+    fs_src: wgpu::ShaderModuleDescriptor,
+) -> wgpu::RenderPipeline {
+    let vs_module = device.create_shader_module(&vs_src);
+    let fs_module = device.create_shader_module(&fs_src);
+
+    device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+        label: Some("Render Pipeline"),
+        layout: Some(&layout),
+        vertex: wgpu::VertexState {
+            module: &vs_module,
+            entry_point: "main",
+            buffers: vertex_layouts,
+        },
+        fragment: Some(wgpu::FragmentState {
+            module: &fs_module,
+            entry_point: "main",
+            targets: &[wgpu::ColorTargetState {
+                format: color_format,
+                alpha_blend: wgpu::BlendState::REPLACE,
+                color_blend: wgpu::BlendState::REPLACE,
+                write_mask: wgpu::ColorWrite::ALL,
+            }],
+        }),
+        primitive: wgpu::PrimitiveState {
+            topology: wgpu::PrimitiveTopology::TriangleList,
+            strip_index_format: None,
+            front_face: wgpu::FrontFace::Ccw,
+            cull_mode: wgpu::CullMode::Back,
+            // Setting this to anything other than Fill requires Features::NON_FILL_POLYGON_MODE
+            polygon_mode: wgpu::PolygonMode::Fill,
+        },
+        depth_stencil: None, // Add a `depth_format: Option<wgpu::TextureFormat>` param if this is needed.
+        multisample: wgpu::MultisampleState {
+            count: 1,
+            mask: !0,
+            alpha_to_coverage_enabled: false,
+        },
+    })
+}
+
+/// Execute the `render_pipeline`, writing output to the `output_texture`. Then
+/// copy the texture to the `output_buffer`.
 fn render(
     device: &wgpu::Device,
     queue: &wgpu::Queue,
@@ -93,7 +143,30 @@ fn render(
     queue.submit(Some(encoder.finish()));
 }
 
-pub async fn run(screenshot_desc: ScreenshotDescriptor) {
+/// Poll data from the device and write the output buffer to the destination path.
+async fn save_buffer_to_image(
+    device: &wgpu::Device,
+    output_buffer: &wgpu::Buffer,
+    dst_path: &str,
+    width: u32,
+    height: u32,
+) {
+    let buffer_slice = output_buffer.slice(..);
+
+    // We have to create the mapping THEN device.poll() before await the
+    // future. Otherwise the application will freeze.
+    let mapping = buffer_slice.map_async(wgpu::MapMode::Read);
+    device.poll(wgpu::Maintain::Wait);
+    mapping.await.unwrap();
+
+    let data = buffer_slice.get_mapped_range();
+
+    use image::{ImageBuffer, Rgba};
+    let buffer = ImageBuffer::<Rgba<u8>, _>::from_raw(width, height, data).unwrap();
+    buffer.save(dst_path).unwrap();
+}
+
+pub async fn run<'a>(screenshot_desc: ScreenshotDescriptor<'a>) {
     let (device, queue) = request_device().await;
 
     let output_texture = texture::Texture::create_rgba_output_texture(
@@ -105,48 +178,19 @@ pub async fn run(screenshot_desc: ScreenshotDescriptor) {
     let output_buffer =
         create_output_buffer(&device, screenshot_desc.width, screenshot_desc.height);
 
-    let vs_module = device.create_shader_module(&wgpu::include_spirv!("shader.vert.spv"));
-    let fs_module = device.create_shader_module(&wgpu::include_spirv!("shader.frag.spv"));
-
     let render_pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
         label: Some("Render Pipeline Layout"),
         bind_group_layouts: &[],
         push_constant_ranges: &[],
     });
-    let render_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-        label: Some("Render Pipeline"),
-        layout: Some(&render_pipeline_layout),
-        vertex: wgpu::VertexState {
-            module: &vs_module,
-            entry_point: "main",
-            buffers: &[],
-        },
-        fragment: Some(wgpu::FragmentState {
-            module: &fs_module,
-            entry_point: "main",
-            targets: &[wgpu::ColorTargetState {
-                format: output_texture.desc.format,
-                alpha_blend: wgpu::BlendState::REPLACE,
-                color_blend: wgpu::BlendState::REPLACE,
-                write_mask: wgpu::ColorWrite::ALL,
-            }],
-        }),
-        primitive: wgpu::PrimitiveState {
-            topology: wgpu::PrimitiveTopology::TriangleList,
-            strip_index_format: None,
-            front_face: wgpu::FrontFace::Ccw,
-            cull_mode: wgpu::CullMode::Back,
-            // Setting this to anything other than Fill requires Features::NON_FILL_POLYGON_MODE
-            polygon_mode: wgpu::PolygonMode::Fill,
-        },
-        depth_stencil: None,
-        multisample: wgpu::MultisampleState {
-            count: 1,
-            mask: !0,
-            alpha_to_coverage_enabled: false,
-        },
-    });
-
+    let render_pipeline = create_render_pipeline(
+        &device,
+        &render_pipeline_layout,
+        output_texture.desc.format,
+        &[], // TODO: ADD VERTICES
+        wgpu::include_spirv!("shader.vert.spv"),
+        wgpu::include_spirv!("shader.frag.spv"),
+    );
     render(
         &device,
         &queue,
@@ -157,26 +201,13 @@ pub async fn run(screenshot_desc: ScreenshotDescriptor) {
         &render_pipeline,
     );
 
-    // We need to scope the mapping variables so that we can unmap the buffer
-    {
-        let buffer_slice = output_buffer.slice(..);
-
-        // We have to create the mapping THEN device.poll() before await the
-        // future. Otherwise the application will freeze.
-        let mapping = buffer_slice.map_async(wgpu::MapMode::Read);
-        device.poll(wgpu::Maintain::Wait);
-        mapping.await.unwrap();
-
-        let data = buffer_slice.get_mapped_range();
-
-        use image::{ImageBuffer, Rgba};
-        let buffer = ImageBuffer::<Rgba<u8>, _>::from_raw(
-            screenshot_desc.width,
-            screenshot_desc.height,
-            data,
-        )
-        .unwrap();
-        buffer.save("image.png").unwrap();
-    }
+    save_buffer_to_image(
+        &device,
+        &output_buffer,
+        screenshot_desc.dst_path,
+        screenshot_desc.width,
+        screenshot_desc.height,
+    )
+    .await;
     output_buffer.unmap();
 }
