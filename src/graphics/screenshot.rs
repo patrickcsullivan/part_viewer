@@ -1,3 +1,5 @@
+use super::texture;
+
 pub struct ScreenshotDescriptor {
     pub width: u32,
     pub height: u32,
@@ -17,23 +19,6 @@ async fn request_device() -> (wgpu::Device, wgpu::Queue) {
         .request_device(&Default::default(), None)
         .await
         .unwrap()
-}
-
-/// Get a description of the texture onto which the image will be rendered.
-fn output_texture_desc<'a>(width: u32, height: u32) -> wgpu::TextureDescriptor<'a> {
-    wgpu::TextureDescriptor {
-        size: wgpu::Extent3d {
-            width,
-            height,
-            depth: 1,
-        },
-        mip_level_count: 1,
-        sample_count: 1,
-        dimension: wgpu::TextureDimension::D2,
-        format: wgpu::TextureFormat::Rgba8UnormSrgb,
-        usage: wgpu::TextureUsage::COPY_SRC | wgpu::TextureUsage::RENDER_ATTACHMENT,
-        label: None,
-    }
 }
 
 /// Create the buffer onto which the output image will be written.
@@ -56,9 +41,7 @@ fn render(
     queue: &wgpu::Queue,
     screenshot_width: u32,
     screenshot_height: u32,
-    output_texture_desc: &wgpu::TextureDescriptor,
-    output_texture: &wgpu::Texture,
-    output_texture_view: &wgpu::TextureView,
+    output_texture: &texture::Texture,
     output_buffer: &wgpu::Buffer,
     render_pipeline: &wgpu::RenderPipeline,
 ) {
@@ -69,7 +52,7 @@ fn render(
         let render_pass_desc = wgpu::RenderPassDescriptor {
             label: Some("Render Pass"),
             color_attachments: &[wgpu::RenderPassColorAttachmentDescriptor {
-                attachment: output_texture_view,
+                attachment: &output_texture.view,
                 resolve_target: None,
                 ops: wgpu::Operations {
                     load: wgpu::LoadOp::Clear(wgpu::Color {
@@ -92,7 +75,7 @@ fn render(
     let u32_size = std::mem::size_of::<u32>() as u32;
     encoder.copy_texture_to_buffer(
         wgpu::TextureCopyView {
-            texture: &output_texture,
+            texture: &output_texture.texture,
             mip_level: 0,
             origin: wgpu::Origin3d::ZERO,
         },
@@ -104,7 +87,7 @@ fn render(
                 rows_per_image: screenshot_height,
             },
         },
-        output_texture_desc.size,
+        output_texture.desc.size,
     );
 
     queue.submit(Some(encoder.finish()));
@@ -113,9 +96,12 @@ fn render(
 pub async fn run(screenshot_desc: ScreenshotDescriptor) {
     let (device, queue) = request_device().await;
 
-    let output_texture_desc = output_texture_desc(screenshot_desc.width, screenshot_desc.height);
-    let output_texture = device.create_texture(&output_texture_desc);
-    let output_texture_view = output_texture.create_view(&Default::default());
+    let output_texture = texture::Texture::create_rgba_output_texture(
+        &device,
+        screenshot_desc.width,
+        screenshot_desc.height,
+        "Output Texture",
+    );
     let output_buffer =
         create_output_buffer(&device, screenshot_desc.width, screenshot_desc.height);
 
@@ -139,7 +125,7 @@ pub async fn run(screenshot_desc: ScreenshotDescriptor) {
             module: &fs_module,
             entry_point: "main",
             targets: &[wgpu::ColorTargetState {
-                format: output_texture_desc.format,
+                format: output_texture.desc.format,
                 alpha_blend: wgpu::BlendState::REPLACE,
                 color_blend: wgpu::BlendState::REPLACE,
                 write_mask: wgpu::ColorWrite::ALL,
@@ -166,15 +152,12 @@ pub async fn run(screenshot_desc: ScreenshotDescriptor) {
         &queue,
         screenshot_desc.width,
         screenshot_desc.height,
-        &output_texture_desc,
         &output_texture,
-        &output_texture_view,
         &output_buffer,
         &render_pipeline,
     );
 
-    // We need to scope the mapping variables so that we can
-    // unmap the buffer
+    // We need to scope the mapping variables so that we can unmap the buffer
     {
         let buffer_slice = output_buffer.slice(..);
 
