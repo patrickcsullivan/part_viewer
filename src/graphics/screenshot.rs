@@ -1,4 +1,12 @@
-pub async fn run() {
+use wgpu::Device;
+
+pub struct ScreenshotDescriptor {
+    pub width: u32,
+    pub height: u32,
+}
+
+/// Request the GPU device and its queue.
+async fn request_device() -> (wgpu::Device, wgpu::Queue) {
     let instance = wgpu::Instance::new(wgpu::BackendBit::PRIMARY);
     let adapter = instance
         .request_adapter(&wgpu::RequestAdapterOptions {
@@ -7,16 +15,19 @@ pub async fn run() {
         })
         .await
         .unwrap();
-    let (device, queue) = adapter
+    adapter
         .request_device(&Default::default(), None)
         .await
-        .unwrap();
+        .unwrap()
+}
 
-    let texture_size = 256u32;
-    let texture_desc = wgpu::TextureDescriptor {
+/// Get a description of the texture to which the output image will be written
+/// to.
+fn output_texture_desc<'a>(width: u32, height: u32) -> wgpu::TextureDescriptor<'a> {
+    wgpu::TextureDescriptor {
         size: wgpu::Extent3d {
-            width: texture_size,
-            height: texture_size,
+            width,
+            height,
             depth: 1,
         },
         mip_level_count: 1,
@@ -25,14 +36,12 @@ pub async fn run() {
         format: wgpu::TextureFormat::Rgba8UnormSrgb,
         usage: wgpu::TextureUsage::COPY_SRC | wgpu::TextureUsage::RENDER_ATTACHMENT,
         label: None,
-    };
-    let texture = device.create_texture(&texture_desc);
-    let texture_view = texture.create_view(&Default::default());
+    }
+}
 
-    // we need to store this for later
+fn create_output_buffer(device: &wgpu::Device, width: u32, height: u32) -> wgpu::Buffer {
     let u32_size = std::mem::size_of::<u32>() as u32;
-
-    let output_buffer_size = (u32_size * texture_size * texture_size) as wgpu::BufferAddress;
+    let output_buffer_size = (u32_size * width * height) as wgpu::BufferAddress;
     let output_buffer_desc = wgpu::BufferDescriptor {
         size: output_buffer_size,
         usage: wgpu::BufferUsage::COPY_DST
@@ -41,7 +50,17 @@ pub async fn run() {
         label: None,
         mapped_at_creation: false,
     };
-    let output_buffer = device.create_buffer(&output_buffer_desc);
+    device.create_buffer(&output_buffer_desc)
+}
+
+pub async fn run(screenshot_desc: ScreenshotDescriptor) {
+    let (device, queue) = request_device().await;
+
+    let output_texture_desc = output_texture_desc(screenshot_desc.width, screenshot_desc.height);
+    let output_texture = device.create_texture(&output_texture_desc);
+    let output_texture_view = output_texture.create_view(&Default::default());
+    let output_buffer =
+        create_output_buffer(&device, screenshot_desc.width, screenshot_desc.height);
 
     let vs_src = include_str!("shader.vert");
     let fs_src = include_str!("shader.frag");
@@ -95,7 +114,7 @@ pub async fn run() {
             module: &fs_module,
             entry_point: "main",
             targets: &[wgpu::ColorTargetState {
-                format: texture_desc.format,
+                format: output_texture_desc.format,
                 alpha_blend: wgpu::BlendState::REPLACE,
                 color_blend: wgpu::BlendState::REPLACE,
                 write_mask: wgpu::ColorWrite::ALL,
@@ -124,7 +143,7 @@ pub async fn run() {
         let render_pass_desc = wgpu::RenderPassDescriptor {
             label: Some("Render Pass"),
             color_attachments: &[wgpu::RenderPassColorAttachmentDescriptor {
-                attachment: &texture_view,
+                attachment: &output_texture_view,
                 resolve_target: None,
                 ops: wgpu::Operations {
                     load: wgpu::LoadOp::Clear(wgpu::Color {
@@ -144,9 +163,10 @@ pub async fn run() {
         render_pass.draw(0..3, 0..1);
     }
 
+    let u32_size = std::mem::size_of::<u32>() as u32;
     encoder.copy_texture_to_buffer(
         wgpu::TextureCopyView {
-            texture: &texture,
+            texture: &output_texture,
             mip_level: 0,
             origin: wgpu::Origin3d::ZERO,
         },
@@ -154,11 +174,11 @@ pub async fn run() {
             buffer: &output_buffer,
             layout: wgpu::TextureDataLayout {
                 offset: 0,
-                bytes_per_row: u32_size * texture_size,
-                rows_per_image: texture_size,
+                bytes_per_row: u32_size * screenshot_desc.width,
+                rows_per_image: screenshot_desc.height,
             },
         },
-        texture_desc.size,
+        output_texture_desc.size,
     );
 
     queue.submit(Some(encoder.finish()));
@@ -177,14 +197,13 @@ pub async fn run() {
         let data = buffer_slice.get_mapped_range();
 
         use image::{ImageBuffer, Rgba};
-        let buffer =
-            ImageBuffer::<Rgba<u8>, _>::from_raw(texture_size, texture_size, data).unwrap();
+        let buffer = ImageBuffer::<Rgba<u8>, _>::from_raw(
+            screenshot_desc.width,
+            screenshot_desc.height,
+            data,
+        )
+        .unwrap();
         buffer.save("image.png").unwrap();
     }
     output_buffer.unmap();
-}
-
-fn main() {
-    use futures::executor::block_on;
-    block_on(run());
 }

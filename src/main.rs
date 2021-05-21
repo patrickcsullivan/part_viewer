@@ -3,6 +3,9 @@ mod graphics;
 use graphics::screenshot;
 
 fn main() {
-    use futures::executor::block_on;
-    block_on(screenshot::run());
+    let descrip = screenshot::ScreenshotDescriptor {
+        width: 256,
+        height: 256,
+    };
+    futures::executor::block_on(screenshot::run(descrip));
 }
