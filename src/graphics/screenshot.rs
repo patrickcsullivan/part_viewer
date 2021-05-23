@@ -1,6 +1,6 @@
 use super::mesh;
+use super::render_pipeline;
 use super::texture;
-use mesh::Vertex;
 
 pub struct ScreenshotDescriptor<'a> {
     pub mesh_path: &'a str,
@@ -38,112 +38,6 @@ fn create_output_buffer(device: &wgpu::Device, width: u32, height: u32) -> wgpu:
         mapped_at_creation: false,
     };
     device.create_buffer(&output_buffer_desc)
-}
-
-/// Create a render pipeline over the specified shaders.
-fn create_render_pipeline(
-    device: &wgpu::Device,
-    layout: &wgpu::PipelineLayout,
-    color_format: wgpu::TextureFormat,
-    vertex_layouts: &[wgpu::VertexBufferLayout],
-    vs_src: wgpu::ShaderModuleDescriptor,
-    fs_src: wgpu::ShaderModuleDescriptor,
-) -> wgpu::RenderPipeline {
-    let vs_module = device.create_shader_module(&vs_src);
-    let fs_module = device.create_shader_module(&fs_src);
-
-    device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-        label: Some("Render Pipeline"),
-        layout: Some(&layout),
-        vertex: wgpu::VertexState {
-            module: &vs_module,
-            entry_point: "main",
-            buffers: vertex_layouts,
-        },
-        fragment: Some(wgpu::FragmentState {
-            module: &fs_module,
-            entry_point: "main",
-            targets: &[wgpu::ColorTargetState {
-                format: color_format,
-                alpha_blend: wgpu::BlendState::REPLACE,
-                color_blend: wgpu::BlendState::REPLACE,
-                write_mask: wgpu::ColorWrite::ALL,
-            }],
-        }),
-        primitive: wgpu::PrimitiveState {
-            topology: wgpu::PrimitiveTopology::TriangleList,
-            strip_index_format: None,
-            front_face: wgpu::FrontFace::Ccw,
-            cull_mode: wgpu::CullMode::Back,
-            // Setting this to anything other than Fill requires Features::NON_FILL_POLYGON_MODE
-            polygon_mode: wgpu::PolygonMode::Fill,
-        },
-        depth_stencil: None, // Add a `depth_format: Option<wgpu::TextureFormat>` param if this is needed.
-        multisample: wgpu::MultisampleState {
-            count: 1,
-            mask: !0,
-            alpha_to_coverage_enabled: false,
-        },
-    })
-}
-
-/// Execute the `render_pipeline`, writing output to the `output_texture`. Then
-/// copy the texture to the `output_buffer`.
-fn render(
-    device: &wgpu::Device,
-    queue: &wgpu::Queue,
-    screenshot_width: u32,
-    screenshot_height: u32,
-    output_texture: &texture::Texture,
-    output_buffer: &wgpu::Buffer,
-    render_pipeline: &wgpu::RenderPipeline,
-) {
-    let mut encoder =
-        device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
-
-    {
-        let render_pass_desc = wgpu::RenderPassDescriptor {
-            label: Some("Render Pass"),
-            color_attachments: &[wgpu::RenderPassColorAttachmentDescriptor {
-                attachment: &output_texture.view,
-                resolve_target: None,
-                ops: wgpu::Operations {
-                    load: wgpu::LoadOp::Clear(wgpu::Color {
-                        r: 0.1,
-                        g: 0.2,
-                        b: 0.3,
-                        a: 0.0,
-                    }),
-                    store: true,
-                },
-            }],
-            depth_stencil_attachment: None,
-        };
-        let mut render_pass = encoder.begin_render_pass(&render_pass_desc);
-
-        render_pass.set_pipeline(render_pipeline);
-        render_pass.draw(0..3, 0..1);
-    }
-
-    let u32_size = std::mem::size_of::<u32>() as u32;
-    encoder.copy_texture_to_buffer(
-        wgpu::TextureCopyView {
-            texture: &output_texture.texture,
-            mip_level: 0,
-            origin: wgpu::Origin3d::ZERO,
-        },
-        wgpu::BufferCopyView {
-            buffer: &output_buffer,
-            layout: wgpu::TextureDataLayout {
-                offset: 0,
-                bytes_per_row: u32_size * screenshot_width,
-                rows_per_image: screenshot_height,
-            },
-        },
-        output_texture.desc.size,
-    );
-
-    queue.submit(Some(encoder.finish()));
 }
 
 /// Poll data from the device and write the output buffer to the destination path.
@@ -184,27 +78,14 @@ pub async fn run(screenshot_desc: ScreenshotDescriptor<'_>) {
 
     let mesh = mesh::Mesh::load(&device, screenshot_desc.mesh_path);
 
-    let render_pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-        label: Some("Render Pipeline Layout"),
-        bind_group_layouts: &[],
-        push_constant_ranges: &[],
-    });
-    let render_pipeline = create_render_pipeline(
-        &device,
-        &render_pipeline_layout,
-        output_texture.desc.format,
-        &[], // TODO: ADD VERTICES
-        wgpu::include_spirv!("shader.vert.spv"),
-        wgpu::include_spirv!("shader.frag.spv"),
-    );
-    render(
+    let render_pipeline = render_pipeline::RenderPipeline::new(&device, output_texture.desc.format);
+    render_pipeline.render(
         &device,
         &queue,
         screenshot_desc.width,
         screenshot_desc.height,
         &output_texture,
         &output_buffer,
-        &render_pipeline,
     );
 
     save_buffer_to_image(
