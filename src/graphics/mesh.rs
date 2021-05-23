@@ -42,7 +42,7 @@ pub struct Mesh {
     pub name: String,
     pub vertex_buffer: wgpu::Buffer,
     pub index_buffer: wgpu::Buffer,
-    pub num_elements: u32,
+    pub num_indices: u32,
 }
 
 impl Mesh {
@@ -84,7 +84,7 @@ impl Mesh {
             name: format!("{:?} Mesh", path.as_ref()),
             vertex_buffer,
             index_buffer,
-            num_elements,
+            num_indices: num_elements,
         })
     }
 }
@@ -115,7 +115,7 @@ where
         self.set_index_buffer(mesh.index_buffer.slice(..), wgpu::IndexFormat::Uint32);
         self.set_bind_group(0, &uniforms, &[]);
         self.set_bind_group(1, &light, &[]);
-        self.draw_indexed(0..mesh.num_elements, 0, 0..1);
+        self.draw_indexed(0..mesh.num_indices, 0, 0..1);
     }
 }
 
@@ -145,6 +145,6 @@ where
         self.set_index_buffer(mesh.index_buffer.slice(..), wgpu::IndexFormat::Uint32);
         self.set_bind_group(0, uniforms, &[]);
         self.set_bind_group(1, light, &[]);
-        self.draw_indexed(0..mesh.num_elements, 0, 0..1);
+        self.draw_indexed(0..mesh.num_indices, 0, 0..1);
     }
 }

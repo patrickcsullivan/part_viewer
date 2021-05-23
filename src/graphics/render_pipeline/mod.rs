@@ -1,3 +1,5 @@
+use super::mesh;
+use super::mesh::Vertex;
 use super::texture;
 
 pub struct RenderPipeline {
@@ -23,7 +25,7 @@ impl RenderPipeline {
             vertex: wgpu::VertexState {
                 module: &vert_shader_module,
                 entry_point: "main",
-                buffers: &[],
+                buffers: &[mesh::MeshVertex::desc()],
             },
             fragment: Some(wgpu::FragmentState {
                 module: &frag_shader_module,
@@ -39,7 +41,7 @@ impl RenderPipeline {
                 topology: wgpu::PrimitiveTopology::TriangleList,
                 strip_index_format: None,
                 front_face: wgpu::FrontFace::Ccw,
-                cull_mode: wgpu::CullMode::Back,
+                cull_mode: wgpu::CullMode::None,
                 // Setting this to anything other than Fill requires Features::NON_FILL_POLYGON_MODE
                 polygon_mode: wgpu::PolygonMode::Fill,
             },
@@ -60,6 +62,7 @@ impl RenderPipeline {
         &self,
         device: &wgpu::Device,
         queue: &wgpu::Queue,
+        mesh: &mesh::Mesh,
         screenshot_width: u32,
         screenshot_height: u32,
         output_texture: &texture::Texture,
@@ -87,9 +90,11 @@ impl RenderPipeline {
                 depth_stencil_attachment: None,
             };
             let mut render_pass = encoder.begin_render_pass(&render_pass_desc);
-
             render_pass.set_pipeline(&self.pipeline);
-            render_pass.draw(0..3, 0..1);
+            render_pass.set_vertex_buffer(0, mesh.vertex_buffer.slice(..));
+            render_pass.set_index_buffer(mesh.index_buffer.slice(..), wgpu::IndexFormat::Uint16);
+            render_pass.draw_indexed(0..mesh.num_indices, 0, 0..1);
+            // render_pass.draw(0..3, 0..1);
         }
 
         let u32_size = std::mem::size_of::<u32>() as u32;

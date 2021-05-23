@@ -12,11 +12,6 @@ impl<'a> Texture<'a> {
         height: u32,
         label: &'a str,
     ) -> Self {
-        let size = wgpu::Extent3d {
-            width,
-            height,
-            depth: 1,
-        };
         let desc = wgpu::TextureDescriptor {
             size: wgpu::Extent3d {
                 width,
