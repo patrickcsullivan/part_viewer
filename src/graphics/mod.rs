@@ -1,4 +1,5 @@
-pub mod mesh;
-pub mod render_pipeline;
+mod light;
+mod mesh;
+mod render_pipeline;
 pub mod screenshot;
-pub mod texture;
+mod texture;

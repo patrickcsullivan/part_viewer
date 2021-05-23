@@ -7,7 +7,11 @@ pub struct RenderPipeline {
 }
 
 impl RenderPipeline {
-    pub fn new(device: &wgpu::Device, output_tex_format: wgpu::TextureFormat) -> Self {
+    pub fn new(
+        device: &wgpu::Device,
+        point_light_bind_group_layout: &wgpu::BindGroupLayout,
+        output_tex_format: wgpu::TextureFormat,
+    ) -> Self {
         let vert_shader_module =
             device.create_shader_module(&wgpu::include_spirv!("shader.vert.spv"));
         let frag_shader_module =
@@ -15,7 +19,7 @@ impl RenderPipeline {
 
         let layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: Some("Render Pipeline Layout"),
-            bind_group_layouts: &[], // diffuse texture and uniform bind group layouts would go here
+            bind_group_layouts: &[point_light_bind_group_layout], // diffuse texture and uniform bind group layouts would go here
             push_constant_ranges: &[],
         });
 
@@ -63,6 +67,7 @@ impl RenderPipeline {
         device: &wgpu::Device,
         queue: &wgpu::Queue,
         mesh: &mesh::Mesh,
+        point_light_bind_group: &wgpu::BindGroup,
         screenshot_width: u32,
         screenshot_height: u32,
         output_texture: &texture::Texture,
@@ -93,6 +98,9 @@ impl RenderPipeline {
             render_pass.set_pipeline(&self.pipeline);
             render_pass.set_vertex_buffer(0, mesh.vertex_buffer.slice(..));
             render_pass.set_index_buffer(mesh.index_buffer.slice(..), wgpu::IndexFormat::Uint16);
+
+            render_pass.set_bind_group(0, point_light_bind_group, &[]);
+
             render_pass.draw_indexed(0..mesh.num_indices, 0, 0..1);
             // render_pass.draw(0..3, 0..1);
         }

@@ -1,7 +1,7 @@
+use super::light;
 use super::mesh;
 use super::render_pipeline;
 use super::texture;
-use wgpu::util::DeviceExt;
 
 pub struct ScreenshotDescriptor<'a> {
     pub mesh_path: &'a str,
@@ -67,6 +67,9 @@ async fn save_buffer_to_image(
 /// Generate a screenshot.
 pub async fn run(screenshot_desc: ScreenshotDescriptor<'_>) {
     let (device, queue) = request_device().await;
+
+    // TODO: Create light from input data.
+    let point_light = light::PointLight::new(&device, (2.0, 2.0, 2.0), (1.0, 0.0, 1.0));
     let output_texture = texture::Texture::create_rgba_output_texture(
         &device,
         screenshot_desc.width,
@@ -75,12 +78,18 @@ pub async fn run(screenshot_desc: ScreenshotDescriptor<'_>) {
     );
     let output_buffer =
         create_output_buffer(&device, screenshot_desc.width, screenshot_desc.height);
-    let render_pipeline = render_pipeline::RenderPipeline::new(&device, output_texture.desc.format);
+    let render_pipeline = render_pipeline::RenderPipeline::new(
+        &device,
+        &point_light.bind_group_layout,
+        output_texture.desc.format,
+    );
+
     let mesh = mesh::Mesh::load(&device, screenshot_desc.mesh_path).unwrap();
     render_pipeline.render(
         &device,
         &queue,
         &mesh,
+        &point_light.bind_group,
         screenshot_desc.width,
         screenshot_desc.height,
         &output_texture,
