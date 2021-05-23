@@ -1,6 +1,9 @@
+use super::mesh;
 use super::texture;
+use mesh::Vertex;
 
 pub struct ScreenshotDescriptor<'a> {
+    pub mesh_path: &'a str,
     pub dst_path: &'a str,
     pub width: u32,
     pub height: u32,
@@ -166,7 +169,8 @@ async fn save_buffer_to_image(
     buffer.save(dst_path).unwrap();
 }
 
-pub async fn run<'a>(screenshot_desc: ScreenshotDescriptor<'a>) {
+/// Generate a screenshot.
+pub async fn run(screenshot_desc: ScreenshotDescriptor<'_>) {
     let (device, queue) = request_device().await;
 
     let output_texture = texture::Texture::create_rgba_output_texture(
@@ -177,6 +181,8 @@ pub async fn run<'a>(screenshot_desc: ScreenshotDescriptor<'a>) {
     );
     let output_buffer =
         create_output_buffer(&device, screenshot_desc.width, screenshot_desc.height);
+
+    let mesh = mesh::Mesh::load(&device, screenshot_desc.mesh_path);
 
     let render_pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
         label: Some("Render Pipeline Layout"),
