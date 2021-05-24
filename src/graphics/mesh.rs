@@ -1,6 +1,4 @@
 use anyhow::*;
-use std::io::BufReader;
-use std::path::Path;
 use wgpu::util::DeviceExt;
 
 pub trait Vertex {
@@ -47,11 +45,7 @@ pub struct Mesh {
 }
 
 impl Mesh {
-    pub fn load<P: AsRef<Path>>(device: &wgpu::Device, path: P) -> Result<Self> {
-        let file = std::fs::File::open(&path).unwrap();
-        let mut root_vase = BufReader::new(&file);
-        let mesh = nom_stl::parse_stl(&mut root_vase)?;
-
+    pub fn load(device: &wgpu::Device, mesh: &nom_stl::Mesh) -> Result<Self> {
         let mut vertices = Vec::new();
         for triangle in mesh.triangles() {
             // TODO: Do I need to make sure thse are CCW around normal?
@@ -71,18 +65,18 @@ impl Mesh {
 
         let num_elements = vertices.len() as u32;
         let vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some(&format!("{:?} Vertex Buffer", path.as_ref())),
+            label: Some("Vertex Buffer"),
             contents: bytemuck::cast_slice(&vertices),
             usage: wgpu::BufferUsage::VERTEX,
         });
         let index_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some(&format!("{:?} Index Buffer", path.as_ref())),
+            label: Some("Index Buffer"),
             contents: bytemuck::cast_slice(&(0..num_elements).collect::<Vec<u32>>()),
             usage: wgpu::BufferUsage::INDEX,
         });
 
         Ok(Self {
-            name: format!("{:?} Mesh", path.as_ref()),
+            name: "Mesh".to_string(),
             vertex_buffer,
             index_buffer,
             num_indices: num_elements,

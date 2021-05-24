@@ -7,10 +7,14 @@ use super::transformation;
 use cgmath::Rotation3;
 
 pub struct ScreenshotDescriptor<'a> {
-    pub mesh_path: &'a str,
+    pub mesh: &'a nom_stl::Mesh,
     pub dst_path: &'a str,
     pub width: u32,
     pub height: u32,
+    pub model_translation: cgmath::Vector3<f32>,
+    pub point_light_position: cgmath::Point3<f32>,
+    pub camera_position: cgmath::Point3<f32>,
+    pub camera_fovy: cgmath::Deg<f32>,
 }
 
 /// Request the GPU device and its queue.
@@ -78,30 +82,27 @@ pub async fn run(screenshot_desc: ScreenshotDescriptor<'_>) {
         "Depth Texture",
     );
 
-    // TODO: Create model transformation from input data.
     let model_transformation = transformation::Transformation::new(
         &device,
         cgmath::Quaternion::from_axis_angle(cgmath::Vector3::unit_x(), cgmath::Deg(-90.0)),
-        cgmath::Vector3 {
-            x: 0.0,
-            y: -5.0,
-            z: 0.0,
-        },
+        screenshot_desc.model_translation,
     );
 
-    // TODO: Create camera from input data.
     let camera = camera::Camera::new_perspective_camera(
         &device,
-        (8.0, 0.0, 25.0),
-        (0.0, 0.0, 0.0),
+        screenshot_desc.camera_position,
+        cgmath::Point3::new(0.0, 0.0, 0.0),
         screenshot_desc.width as f32 / screenshot_desc.height as f32,
-        cgmath::Deg(45.0),
+        screenshot_desc.camera_fovy,
         0.1,
-        100.0,
+        1000.0,
     );
 
-    // TODO: Create light from input data.
-    let point_light = light::PointLight::new(&device, (8.0, 12.0, 15.0), (1.0, 1.0, 1.0));
+    let point_light = light::PointLight::new(
+        &device,
+        screenshot_desc.point_light_position.into(),
+        (1.0, 1.0, 1.0),
+    );
 
     let output_texture = texture::Texture::create_rgba_output_texture(
         &device,
@@ -120,7 +121,7 @@ pub async fn run(screenshot_desc: ScreenshotDescriptor<'_>) {
         output_texture.desc.format,
     );
 
-    let mesh = mesh::Mesh::load(&device, screenshot_desc.mesh_path).unwrap();
+    let mesh = mesh::Mesh::load(&device, screenshot_desc.mesh).unwrap();
     render_pipeline.render(
         &device,
         &queue,
