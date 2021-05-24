@@ -1,26 +1,29 @@
 use cgmath::{Matrix4, Point3, Rad, Vector3};
 use wgpu::util::DeviceExt;
 
-/// Uniform data that can be sent to the shaders. Contains the camera view
-/// projection matrix.
+/// Uniform data that can be sent to the shaders. Contains the camera position
+/// and view projection matrix.
 #[repr(C)]
 #[derive(Debug, Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
-pub struct ViewProjectionUniform {
+pub struct CameraUniforms {
+    pub position: [f32; 3],
+    _padding: u32,
     pub view_proj: [[f32; 4]; 4],
 }
 
-impl ViewProjectionUniform {
-    /// Creates a new view projection matrix uniform, initialized to the
-    /// identity matrix.
+impl CameraUniforms {
     fn new() -> Self {
         use cgmath::SquareMatrix;
         Self {
+            position: [0.0; 3],
+            _padding: 0,
             view_proj: cgmath::Matrix4::identity().into(),
         }
     }
 
     /// Set the uniform to the given view projection matrix.
-    fn update_view_proj(&mut self, view_proj_matrix: Matrix4<f32>) {
+    fn update(&mut self, position: Vector3<f32>, view_proj_matrix: Matrix4<f32>) {
+        self.position = position.into();
         self.view_proj = view_proj_matrix.into();
     }
 }
@@ -41,7 +44,7 @@ const OPENGL_TO_WGPU_MATRIX: cgmath::Matrix4<f32> = cgmath::Matrix4::new(
 
 pub struct Camera {
     // TODO: uniform and ViewProjectionUniform could probably be private
-    pub uniform: ViewProjectionUniform,
+    pub uniform: CameraUniforms,
     pub buffer: wgpu::Buffer,
     pub bind_group_layout: wgpu::BindGroupLayout,
     pub bind_group: wgpu::BindGroup,
@@ -57,13 +60,18 @@ impl Camera {
         znear: f32,
         zfar: f32,
     ) -> Self {
-        let inv_transf_matrix =
-            Matrix4::look_at_rh(position.into(), target.into(), Vector3::unit_y());
+        let position: Point3<f32> = position.into();
+        let target: Point3<f32> = target.into();
+
+        let inv_transf_matrix = Matrix4::look_at_rh(position, target, Vector3::unit_y());
         let projection_matrix = cgmath::perspective(fovy, aspect, znear, zfar);
         let view_transf_matrix = OPENGL_TO_WGPU_MATRIX * projection_matrix * inv_transf_matrix;
 
-        let mut uniform = ViewProjectionUniform::new();
-        uniform.update_view_proj(view_transf_matrix);
+        let mut uniform = CameraUniforms::new();
+        uniform.update(
+            Vector3::new(position.x, position.y, position.z),
+            view_transf_matrix,
+        );
 
         let buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("Perspective Camera Uniform Buffer"),
@@ -74,7 +82,7 @@ impl Camera {
         let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
             entries: &[wgpu::BindGroupLayoutEntry {
                 binding: 0,
-                visibility: wgpu::ShaderStage::VERTEX,
+                visibility: wgpu::ShaderStage::VERTEX | wgpu::ShaderStage::FRAGMENT,
                 ty: wgpu::BindingType::Buffer {
                     ty: wgpu::BufferBindingType::Uniform,
                     has_dynamic_offset: false,

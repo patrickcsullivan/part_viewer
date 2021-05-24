@@ -7,6 +7,7 @@ uniform ModelTransformation {
 
 layout(set=1, binding=0)
 uniform Camera {
+    vec3 u_view_position; // unused
     mat4 u_view_proj;
 };
 

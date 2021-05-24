@@ -1,5 +1,11 @@
 #version 450
 
+layout(set=1, binding=0)
+uniform Camera {
+    vec3 u_view_position;
+    mat4 u_view_proj; // unused
+};
+
 layout(set = 2, binding = 0) uniform Light {
     vec3 light_position;
     vec3 light_color;
