@@ -18,6 +18,7 @@ tobj = "2.0"
 wgpu = "0.7"
 winit = "0.24"
 nom_stl = "0.2.2"
+clap = "2.33.3"
 
 [build-dependencies]
 anyhow = "1.0"

@@ -6,13 +6,42 @@ use graphics::screenshot;
 use std::io::BufReader;
 
 fn main() {
-    let width = 512;
-    let height = 512;
+    let matches = clap::App::new("Part Viewer")
+        .arg(
+            clap::Arg::with_name("INPUT")
+                .help("The input STL file to use")
+                .required(true)
+                .index(1),
+        )
+        .arg(
+            clap::Arg::with_name("OUTPUT")
+                .help("The output destination")
+                .required(true)
+                .index(2),
+        )
+        .arg(
+            clap::Arg::with_name("WIDTH")
+                .help("Width of the output image in pixels")
+                .required(true)
+                .index(3),
+        )
+        .arg(
+            clap::Arg::with_name("HEIGHT")
+                .help("Height of the output image in pixels")
+                .required(true)
+                .index(4),
+        )
+        .get_matches();
+
+    let src_path = matches.value_of("INPUT").unwrap();
+    let dst_path = matches.value_of("OUTPUT").unwrap();
+    let width = matches.value_of("WIDTH").unwrap().parse::<u32>().unwrap();
+    let height = matches.value_of("HEIGHT").unwrap().parse::<u32>().unwrap();
+
     let aspect = width as f32 / height as f32;
     let camera_fovy = cgmath::Deg(45.0);
 
-    let path = "res/sphere.stl";
-    let file = std::fs::File::open(&path).unwrap();
+    let file = std::fs::File::open(&src_path).unwrap();
     let mut reader = BufReader::new(&file);
     let mesh = nom_stl::parse_stl(&mut reader).unwrap();
     let mut bounding_box = BoundingBox::new(&mesh);
@@ -28,7 +57,7 @@ fn main() {
 
     let descrip = screenshot::ScreenshotDescriptor {
         mesh: &mesh,
-        dst_path: "output.png",
+        dst_path,
         width,
         height,
         model_translation,
