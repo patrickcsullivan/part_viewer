@@ -1,3 +1,4 @@
+use super::camera;
 use super::light;
 use super::mesh;
 use super::render_pipeline;
@@ -68,8 +69,20 @@ async fn save_buffer_to_image(
 pub async fn run(screenshot_desc: ScreenshotDescriptor<'_>) {
     let (device, queue) = request_device().await;
 
+    // TODO: Create camera from input data.
+    let camera = camera::Camera::new_perspective_camera(
+        &device,
+        (0.0, 1.0, 2.0),
+        (0.0, 0.0, 0.0),
+        1.0,
+        cgmath::Deg(45.0),
+        0.1,
+        100.0,
+    );
+
     // TODO: Create light from input data.
     let point_light = light::PointLight::new(&device, (2.0, 2.0, 2.0), (1.0, 0.0, 1.0));
+
     let output_texture = texture::Texture::create_rgba_output_texture(
         &device,
         screenshot_desc.width,
@@ -80,6 +93,7 @@ pub async fn run(screenshot_desc: ScreenshotDescriptor<'_>) {
         create_output_buffer(&device, screenshot_desc.width, screenshot_desc.height);
     let render_pipeline = render_pipeline::RenderPipeline::new(
         &device,
+        &camera.bind_group_layout,
         &point_light.bind_group_layout,
         output_texture.desc.format,
     );
@@ -89,6 +103,7 @@ pub async fn run(screenshot_desc: ScreenshotDescriptor<'_>) {
         &device,
         &queue,
         &mesh,
+        &camera.bind_group,
         &point_light.bind_group,
         screenshot_desc.width,
         screenshot_desc.height,

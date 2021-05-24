@@ -21,6 +21,7 @@ impl PointLightUniform {
 }
 
 pub struct PointLight {
+    // TODO: uniform and PointLightUniform could probably be private
     pub uniform: PointLightUniform,
     pub buffer: wgpu::Buffer,
     pub bind_group_layout: wgpu::BindGroupLayout,

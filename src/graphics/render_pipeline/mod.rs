@@ -9,6 +9,7 @@ pub struct RenderPipeline {
 impl RenderPipeline {
     pub fn new(
         device: &wgpu::Device,
+        camera_bind_group_layout: &wgpu::BindGroupLayout,
         point_light_bind_group_layout: &wgpu::BindGroupLayout,
         output_tex_format: wgpu::TextureFormat,
     ) -> Self {
@@ -19,7 +20,7 @@ impl RenderPipeline {
 
         let layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: Some("Render Pipeline Layout"),
-            bind_group_layouts: &[point_light_bind_group_layout], // diffuse texture and uniform bind group layouts would go here
+            bind_group_layouts: &[camera_bind_group_layout, point_light_bind_group_layout],
             push_constant_ranges: &[],
         });
 
@@ -67,6 +68,7 @@ impl RenderPipeline {
         device: &wgpu::Device,
         queue: &wgpu::Queue,
         mesh: &mesh::Mesh,
+        camera_bind_group: &wgpu::BindGroup,
         point_light_bind_group: &wgpu::BindGroup,
         screenshot_width: u32,
         screenshot_height: u32,
@@ -98,9 +100,8 @@ impl RenderPipeline {
             render_pass.set_pipeline(&self.pipeline);
             render_pass.set_vertex_buffer(0, mesh.vertex_buffer.slice(..));
             render_pass.set_index_buffer(mesh.index_buffer.slice(..), wgpu::IndexFormat::Uint16);
-
-            render_pass.set_bind_group(0, point_light_bind_group, &[]);
-
+            render_pass.set_bind_group(0, camera_bind_group, &[]);
+            render_pass.set_bind_group(1, point_light_bind_group, &[]);
             render_pass.draw_indexed(0..mesh.num_indices, 0, 0..1);
             // render_pass.draw(0..3, 0..1);
         }
