@@ -81,10 +81,10 @@ pub async fn run(screenshot_desc: ScreenshotDescriptor<'_>) {
     // TODO: Create model transformation from input data.
     let model_transformation = transformation::Transformation::new(
         &device,
-        cgmath::Quaternion::from_axis_angle(cgmath::Vector3::unit_x(), cgmath::Deg(90.0)),
+        cgmath::Quaternion::from_axis_angle(cgmath::Vector3::unit_x(), cgmath::Deg(-90.0)),
         cgmath::Vector3 {
             x: 0.0,
-            y: 0.0,
+            y: -5.0,
             z: 0.0,
         },
     );
@@ -92,7 +92,7 @@ pub async fn run(screenshot_desc: ScreenshotDescriptor<'_>) {
     // TODO: Create camera from input data.
     let camera = camera::Camera::new_perspective_camera(
         &device,
-        (8.0, -25.0, 25.0),
+        (8.0, 0.0, 25.0),
         (0.0, 0.0, 0.0),
         screenshot_desc.width as f32 / screenshot_desc.height as f32,
         cgmath::Deg(45.0),

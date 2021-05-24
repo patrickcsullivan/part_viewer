@@ -1,7 +1,12 @@
 #version 450
 
+layout(set=0, binding=0)
+uniform ModelTransformation {
+    mat4 u_model_transf;
+};
+
 layout(set=1, binding=0)
-uniform Uniforms {
+uniform Camera {
     mat4 u_view_proj;
 };
 
@@ -15,5 +20,5 @@ void main() {
     v_normal = a_normal;
     v_position = a_position;
 
-    gl_Position = u_view_proj * vec4(a_position, 1.0);
+    gl_Position = u_view_proj * u_model_transf * vec4(a_position, 1.0);
 }
