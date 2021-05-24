@@ -12,9 +12,9 @@ layout(location=0) out vec4 f_color;
 
 void main() {
     // TODO: Use input object color instead of hard-coded color.
-    vec4 object_color = vec4(0.3, 0.2, 0.1, 1.0);
+    vec4 object_color = vec4(1.0, 1.0, 1.0, 1.0);
 
-    float ambient_strength = 0.1;
+    float ambient_strength = 0.05;
     vec3 ambient_color = light_color * ambient_strength;
 
     vec3 normal = normalize(v_normal);

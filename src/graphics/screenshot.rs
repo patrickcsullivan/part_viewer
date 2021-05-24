@@ -101,7 +101,7 @@ pub async fn run(screenshot_desc: ScreenshotDescriptor<'_>) {
     );
 
     // TODO: Create light from input data.
-    let point_light = light::PointLight::new(&device, (8.0, 12.0, 15.0), (1.0, 0.0, 1.0));
+    let point_light = light::PointLight::new(&device, (8.0, 12.0, 15.0), (1.0, 1.0, 1.0));
 
     let output_texture = texture::Texture::create_rgba_output_texture(
         &device,

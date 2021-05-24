@@ -17,7 +17,10 @@ layout(location=1) out vec3 v_normal;
 layout(location=2) out vec3 v_position;
 
 void main() {
-    v_normal = a_normal;
+    // TODO: This matrix math should be pulled out of the shader.
+    mat3 normal_matrix = mat3(transpose(inverse(u_model_transf)));
+    v_normal = normal_matrix * a_normal;
+
     v_position = a_position;
 
     gl_Position = u_view_proj * u_model_transf * vec4(a_position, 1.0);
