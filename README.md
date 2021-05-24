@@ -9,7 +9,7 @@ Build the crate and move the `part_viewer` binary somewhere where it will be vis
 part_viewer <INPUT_PATH> <OUTPUT_PATH> <OUTPUT_WIDTH> <OUTPUT_HEIGHT>
 ```
 
-`<OUTPUT_PATH>` should be an STL file. A PNG will be created at the `<OUTPUT_PATH>`.
+`<INPUT_PATH>` should be an STL file. A PNG will be created at the `<OUTPUT_PATH>`.
 
 ## Credits
 
