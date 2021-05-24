@@ -1,6 +1,6 @@
 #version 450
 
-layout(set = 1, binding = 0) uniform Light {
+layout(set = 2, binding = 0) uniform Light {
     vec3 light_position;
     vec3 light_color;
 };

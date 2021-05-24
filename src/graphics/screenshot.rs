@@ -3,6 +3,8 @@ use super::light;
 use super::mesh;
 use super::render_pipeline;
 use super::texture;
+use super::transformation;
+use cgmath::Rotation3;
 
 pub struct ScreenshotDescriptor<'a> {
     pub mesh_path: &'a str,
@@ -76,6 +78,17 @@ pub async fn run(screenshot_desc: ScreenshotDescriptor<'_>) {
         "Depth Texture",
     );
 
+    // TODO: Create model transformation from input data.
+    let model_transformation = transformation::Transformation::new(
+        &device,
+        cgmath::Quaternion::from_axis_angle(cgmath::Vector3::unit_x(), cgmath::Deg(90.0)),
+        cgmath::Vector3 {
+            x: 0.0,
+            y: 0.0,
+            z: 0.0,
+        },
+    );
+
     // TODO: Create camera from input data.
     let camera = camera::Camera::new_perspective_camera(
         &device,
@@ -100,6 +113,7 @@ pub async fn run(screenshot_desc: ScreenshotDescriptor<'_>) {
         create_output_buffer(&device, screenshot_desc.width, screenshot_desc.height);
     let render_pipeline = render_pipeline::RenderPipeline::new(
         &device,
+        &model_transformation.bind_group_layout,
         &camera.bind_group_layout,
         &point_light.bind_group_layout,
         depth_texture.desc.format,
@@ -111,6 +125,7 @@ pub async fn run(screenshot_desc: ScreenshotDescriptor<'_>) {
         &device,
         &queue,
         &mesh,
+        &model_transformation.bind_group,
         &camera.bind_group,
         &point_light.bind_group,
         screenshot_desc.width,

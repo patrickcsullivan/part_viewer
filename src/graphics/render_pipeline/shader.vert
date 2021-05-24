@@ -1,6 +1,6 @@
 #version 450
 
-layout(set=0, binding=0)
+layout(set=1, binding=0)
 uniform Uniforms {
     mat4 u_view_proj;
 };

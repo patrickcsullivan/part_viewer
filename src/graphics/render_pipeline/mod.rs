@@ -9,6 +9,7 @@ pub struct RenderPipeline {
 impl RenderPipeline {
     pub fn new(
         device: &wgpu::Device,
+        model_transformation_bind_group_layout: &wgpu::BindGroupLayout,
         camera_bind_group_layout: &wgpu::BindGroupLayout,
         point_light_bind_group_layout: &wgpu::BindGroupLayout,
         depth_texture_format: wgpu::TextureFormat,
@@ -21,7 +22,11 @@ impl RenderPipeline {
 
         let layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: Some("Render Pipeline Layout"),
-            bind_group_layouts: &[camera_bind_group_layout, point_light_bind_group_layout],
+            bind_group_layouts: &[
+                model_transformation_bind_group_layout,
+                camera_bind_group_layout,
+                point_light_bind_group_layout,
+            ],
             push_constant_ranges: &[],
         });
 
@@ -78,6 +83,7 @@ impl RenderPipeline {
         device: &wgpu::Device,
         queue: &wgpu::Queue,
         mesh: &mesh::Mesh,
+        model_transformation_bind_group: &wgpu::BindGroup,
         camera_bind_group: &wgpu::BindGroup,
         point_light_bind_group: &wgpu::BindGroup,
         screenshot_width: u32,
@@ -117,8 +123,9 @@ impl RenderPipeline {
             let mut render_pass = encoder.begin_render_pass(&render_pass_desc);
             render_pass.set_pipeline(&self.pipeline);
             render_pass.set_vertex_buffer(0, mesh.vertex_buffer.slice(..));
-            render_pass.set_bind_group(0, camera_bind_group, &[]);
-            render_pass.set_bind_group(1, point_light_bind_group, &[]);
+            render_pass.set_bind_group(0, model_transformation_bind_group, &[]);
+            render_pass.set_bind_group(1, camera_bind_group, &[]);
+            render_pass.set_bind_group(2, point_light_bind_group, &[]);
             render_pass.draw(0..mesh.num_indices, 0..1);
         }
 
