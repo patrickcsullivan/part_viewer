@@ -11,7 +11,8 @@ impl RenderPipeline {
         device: &wgpu::Device,
         camera_bind_group_layout: &wgpu::BindGroupLayout,
         point_light_bind_group_layout: &wgpu::BindGroupLayout,
-        output_tex_format: wgpu::TextureFormat,
+        depth_texture_format: wgpu::TextureFormat,
+        output_texture_format: wgpu::TextureFormat,
     ) -> Self {
         let vert_shader_module =
             device.create_shader_module(&wgpu::include_spirv!("shader.vert.spv"));
@@ -36,7 +37,7 @@ impl RenderPipeline {
                 module: &frag_shader_module,
                 entry_point: "main",
                 targets: &[wgpu::ColorTargetState {
-                    format: output_tex_format,
+                    format: output_texture_format,
                     alpha_blend: wgpu::BlendState::REPLACE,
                     color_blend: wgpu::BlendState::REPLACE,
                     write_mask: wgpu::ColorWrite::ALL,
@@ -46,11 +47,20 @@ impl RenderPipeline {
                 topology: wgpu::PrimitiveTopology::TriangleList,
                 strip_index_format: None,
                 front_face: wgpu::FrontFace::Ccw,
-                cull_mode: wgpu::CullMode::None,
-                // Setting this to anything other than Fill requires Features::NON_FILL_POLYGON_MODE
+                cull_mode: wgpu::CullMode::Back,
+                // Setting this to anything other than Fill requires Features::NON_FILL_POLYGON_MODE.
                 polygon_mode: wgpu::PolygonMode::Fill,
             },
-            depth_stencil: None, // Add a `depth_format: Option<wgpu::TextureFormat>` param if this is needed.
+            depth_stencil: Some(wgpu::DepthStencilState {
+                format: depth_texture_format,
+                depth_write_enabled: true,
+                depth_compare: wgpu::CompareFunction::Less,
+                // Stencil and depth buffers are often stored together. We aren't using stencil here.
+                stencil: wgpu::StencilState::default(),
+                bias: wgpu::DepthBiasState::default(),
+                // Setting this to true requires Features::DEPTH_CLAMPING
+                clamp_depth: false,
+            }),
             multisample: wgpu::MultisampleState {
                 count: 1,
                 mask: !0,
@@ -72,6 +82,7 @@ impl RenderPipeline {
         point_light_bind_group: &wgpu::BindGroup,
         screenshot_width: u32,
         screenshot_height: u32,
+        depth_texture: &texture::Texture,
         output_texture: &texture::Texture,
         output_buffer: &wgpu::Buffer,
     ) {
@@ -94,16 +105,21 @@ impl RenderPipeline {
                         store: true,
                     },
                 }],
-                depth_stencil_attachment: None,
+                depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachmentDescriptor {
+                    attachment: &depth_texture.view,
+                    depth_ops: Some(wgpu::Operations {
+                        load: wgpu::LoadOp::Clear(1.0),
+                        store: true,
+                    }),
+                    stencil_ops: None,
+                }),
             };
             let mut render_pass = encoder.begin_render_pass(&render_pass_desc);
             render_pass.set_pipeline(&self.pipeline);
             render_pass.set_vertex_buffer(0, mesh.vertex_buffer.slice(..));
-            render_pass.set_index_buffer(mesh.index_buffer.slice(..), wgpu::IndexFormat::Uint16);
             render_pass.set_bind_group(0, camera_bind_group, &[]);
             render_pass.set_bind_group(1, point_light_bind_group, &[]);
-            render_pass.draw_indexed(0..mesh.num_indices, 0, 0..1);
-            // render_pass.draw(0..3, 0..1);
+            render_pass.draw(0..mesh.num_indices, 0..1);
         }
 
         let u32_size = std::mem::size_of::<u32>() as u32;

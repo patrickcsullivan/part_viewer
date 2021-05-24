@@ -69,19 +69,26 @@ async fn save_buffer_to_image(
 pub async fn run(screenshot_desc: ScreenshotDescriptor<'_>) {
     let (device, queue) = request_device().await;
 
+    let depth_texture = texture::Texture::create_depth_texture(
+        &device,
+        screenshot_desc.width,
+        screenshot_desc.height,
+        "Depth Texture",
+    );
+
     // TODO: Create camera from input data.
     let camera = camera::Camera::new_perspective_camera(
         &device,
-        (0.0, 1.0, 2.0),
+        (8.0, -25.0, 25.0),
         (0.0, 0.0, 0.0),
-        1.0,
+        screenshot_desc.width as f32 / screenshot_desc.height as f32,
         cgmath::Deg(45.0),
         0.1,
         100.0,
     );
 
     // TODO: Create light from input data.
-    let point_light = light::PointLight::new(&device, (2.0, 2.0, 2.0), (1.0, 0.0, 1.0));
+    let point_light = light::PointLight::new(&device, (8.0, 12.0, 15.0), (1.0, 0.0, 1.0));
 
     let output_texture = texture::Texture::create_rgba_output_texture(
         &device,
@@ -95,6 +102,7 @@ pub async fn run(screenshot_desc: ScreenshotDescriptor<'_>) {
         &device,
         &camera.bind_group_layout,
         &point_light.bind_group_layout,
+        depth_texture.desc.format,
         output_texture.desc.format,
     );
 
@@ -107,6 +115,7 @@ pub async fn run(screenshot_desc: ScreenshotDescriptor<'_>) {
         &point_light.bind_group,
         screenshot_desc.width,
         screenshot_desc.height,
+        &depth_texture,
         &output_texture,
         &output_buffer,
     );

@@ -38,6 +38,7 @@ impl Vertex for MeshVertex {
     }
 }
 
+#[derive(Debug)]
 pub struct Mesh {
     pub name: String,
     pub vertex_buffer: wgpu::Buffer,
@@ -86,65 +87,5 @@ impl Mesh {
             index_buffer,
             num_indices: num_elements,
         })
-    }
-}
-
-pub trait DrawModel<'a, 'b>
-where
-    'b: 'a,
-{
-    fn draw_mesh(
-        &mut self,
-        mesh: &'b Mesh,
-        uniforms: &'b wgpu::BindGroup,
-        light: &'b wgpu::BindGroup,
-    );
-}
-
-impl<'a, 'b> DrawModel<'a, 'b> for wgpu::RenderPass<'a>
-where
-    'b: 'a,
-{
-    fn draw_mesh(
-        &mut self,
-        mesh: &'b Mesh,
-        uniforms: &'b wgpu::BindGroup,
-        light: &'b wgpu::BindGroup,
-    ) {
-        self.set_vertex_buffer(0, mesh.vertex_buffer.slice(..));
-        self.set_index_buffer(mesh.index_buffer.slice(..), wgpu::IndexFormat::Uint32);
-        self.set_bind_group(0, &uniforms, &[]);
-        self.set_bind_group(1, &light, &[]);
-        self.draw_indexed(0..mesh.num_indices, 0, 0..1);
-    }
-}
-
-pub trait DrawLight<'a, 'b>
-where
-    'b: 'a,
-{
-    fn draw_light_mesh(
-        &mut self,
-        mesh: &'b Mesh,
-        uniforms: &'b wgpu::BindGroup,
-        light: &'b wgpu::BindGroup,
-    );
-}
-
-impl<'a, 'b> DrawLight<'a, 'b> for wgpu::RenderPass<'a>
-where
-    'b: 'a,
-{
-    fn draw_light_mesh(
-        &mut self,
-        mesh: &'b Mesh,
-        uniforms: &'b wgpu::BindGroup,
-        light: &'b wgpu::BindGroup,
-    ) {
-        self.set_vertex_buffer(0, mesh.vertex_buffer.slice(..));
-        self.set_index_buffer(mesh.index_buffer.slice(..), wgpu::IndexFormat::Uint32);
-        self.set_bind_group(0, uniforms, &[]);
-        self.set_bind_group(1, light, &[]);
-        self.draw_indexed(0..mesh.num_indices, 0, 0..1);
     }
 }

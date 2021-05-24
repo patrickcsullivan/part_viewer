@@ -4,7 +4,7 @@ use graphics::screenshot;
 
 fn main() {
     let descrip = screenshot::ScreenshotDescriptor {
-        mesh_path: "res/sphere.stl",
+        mesh_path: "res/utah_teapot.stl",
         dst_path: "output.png",
         width: 512,
         height: 512,
