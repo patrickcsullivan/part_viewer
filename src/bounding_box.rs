@@ -1,3 +1,11 @@
+use cgmath::{Angle, Vector3};
+
+pub enum Axis {
+    X,
+    Y,
+    Z,
+}
+
 pub struct BoundingBox {
     pub x_min: f32,
     pub x_max: f32,
@@ -20,7 +28,9 @@ impl BoundingBox {
 
         for triangle in mesh.triangles() {
             for vertex in triangle.vertices().iter() {
-                let (x, y, z) = (vertex[0], vertex[1], vertex[2]);
+                // Shif the coordinates around since the renderer will rotate
+                // the model -90 degrees around the x axis.
+                let (x, y, z) = (vertex[0], vertex[2], -1.0 * vertex[1]);
                 if x < bounding_box.x_min {
                     bounding_box.x_min = x;
                 }
@@ -43,6 +53,15 @@ impl BoundingBox {
         }
 
         bounding_box
+    }
+
+    pub fn shift(&mut self, vec: Vector3<f32>) {
+        self.x_min += vec.x;
+        self.x_max += vec.x;
+        self.y_min += vec.y;
+        self.y_max += vec.y;
+        self.z_min += vec.z;
+        self.z_max += vec.z;
     }
 
     pub fn dx(&self) -> f32 {
@@ -69,13 +88,65 @@ impl BoundingBox {
         origin - self.center()
     }
 
-    // enum Axis {
-    //     X,
-    //     Y,
-    //     Z,
-    // }
+    /// Returns the axis along which the bounding box has the larget cross
+    /// section area.
+    pub fn largest_cross_section_axis(&self) -> Axis {
+        let x_axis_area = self.dy() * self.dz();
+        let y_axis_area = self.dx() * self.dz();
+        let z_axis_area = self.dx() * self.dy();
 
-    // fn largest_bounding_box_cross_section(bounding_box: &BoundingBox) -> Axis {
-    //     let x_area =
-    // }
+        if x_axis_area > z_axis_area {
+            Axis::X
+        } else {
+            Axis::Z
+        }
+        // if y_axis_area > x_axis_area && y_axis_area > z_axis_area {
+        //     Axis::Y
+        // } else if x_axis_area > z_axis_area {
+        //     Axis::X
+        // } else {
+        //     Axis::Z
+        // }
+    }
+
+    /// Returns the width and height of the bounding box cross section when
+    /// viewed along the given axis.
+    pub fn visible_size(&self, axis: &Axis) -> (f32, f32) {
+        match axis {
+            Axis::X => (self.dz(), self.dy()),
+            Axis::Y => (self.dx(), self.dz()),
+            Axis::Z => (self.dx(), self.dy()),
+        }
+    }
+
+    /// Returns a position on the given axis where the camera will be filled
+    /// with the part at the origin.
+    pub fn pick_camera_position(
+        &self,
+        aspect: f32,
+        fovy: cgmath::Deg<f32>,
+        axis: &Axis,
+    ) -> cgmath::Point3<f32> {
+        let (visible_width, visible_height) = self.visible_size(axis);
+        let theta = cgmath::Deg(90.0) - fovy / 2.0;
+        let target_height = if aspect >= visible_width / visible_height {
+            visible_height
+        } else {
+            1.0 / aspect * visible_width
+        };
+        let camera_to_box = theta.sin() * target_height;
+        match axis {
+            Axis::X => cgmath::Point3::new(camera_to_box + self.dx(), 0.0, 0.0),
+            Axis::Y => cgmath::Point3::new(0.0, camera_to_box + self.dy(), 0.0),
+            Axis::Z => cgmath::Point3::new(0.0, 0.0, camera_to_box + self.dz()),
+        }
+    }
+
+    pub fn pick_light_position(&self, axis: &Axis) -> cgmath::Point3<f32> {
+        match axis {
+            Axis::X => cgmath::Point3::new(self.dx(), self.dy(), 0.0),
+            Axis::Y => cgmath::Point3::new(0.0, self.dy(), -1.0 * self.dz()),
+            Axis::Z => cgmath::Point3::new(0.0, self.dy(), self.dz()),
+        }
+    }
 }
